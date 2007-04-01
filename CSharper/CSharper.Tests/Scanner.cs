@@ -54,9 +54,11 @@ public class ScannerTest
   static void TestError(int errorCode, string message, int line, int column, string code)
   {
     Compiler compiler = new Compiler();
-    Scan(code, compiler);
+    Scanner scanner = new Scanner(compiler, new StringReader(code));
+    Token token;
+    while(scanner.NextToken(out token)) { }
 
-    Assert.GreaterOrEqual(compiler.Messages.Count, 1);
+    Assert.GreaterOrEqual(compiler.Messages.Count, 1, "Expected a "+errorCode.ToString()+" diagnostic code");
     Assert.AreEqual(line, compiler.Messages[0].Position.Line);
     Assert.AreEqual(column, compiler.Messages[0].Position.Column);
 
@@ -72,63 +74,88 @@ public class ScannerTest
   static readonly Regex errorRe = new Regex(@"^(?:error|warning) CS(\d{4}): (.*)$", RegexOptions.Singleline);
   #endregion
 
+  #region TestTokens
+  [Test]
+  public void TestTokens()
+  {
+    TestTokens(@"abc @void vo\u0069d \u0069 get void",
+               TokenType.Identifier, TokenType.Identifier, TokenType.Identifier, TokenType.Identifier,
+               TokenType.Identifier, TokenType.Void, TokenType.EOF);
+    TestTokens("1 .5 5m 'a' \"xx\" null true false", TokenType.Literal, TokenType.Literal, TokenType.Literal,
+               TokenType.Literal, TokenType.Literal, TokenType.Literal, TokenType.Literal, TokenType.Literal);
+    TestTokens("/// <foo></foo>", TokenType.XmlCommentLine);
+    TestTokens("~ ! % ^ & | * ( ) - + { } [ ] : ; , . < > / ?", TokenType.Tilde, TokenType.Bang, TokenType.Percent,
+               TokenType.Caret, TokenType.Ampersand, TokenType.Pipe, TokenType.Asterisk, TokenType.LParen,
+               TokenType.RParen, TokenType.Minus, TokenType.Plus, TokenType.LCurly, TokenType.RCurly,
+               TokenType.LSquare, TokenType.RSquare, TokenType.Colon, TokenType.Semicolon, TokenType.Comma,
+               TokenType.Period, TokenType.LessThan, TokenType.GreaterThan, TokenType.Slash, TokenType.Question);
+    TestTokens("&& || << >> <= >= == != :: ?? ++ --", TokenType.LogAnd, TokenType.LogOr, TokenType.LShift,
+               TokenType.RShift, TokenType.LessOrEq, TokenType.GreaterOrEq, TokenType.AreEqual, TokenType.NotEqual,
+               TokenType.Scope, TokenType.NullCoalesce, TokenType.Increment, TokenType.Decrement);
+    TestTokens("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.Assign, TokenType.Assign, TokenType.Assign,
+               TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign,
+               TokenType.Assign, TokenType.Assign, TokenType.Assign);
+    TestValues("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.Equals, TokenType.Percent, TokenType.Caret,
+               TokenType.Ampersand, TokenType.Pipe, TokenType.Asterisk, TokenType.Minus, TokenType.Plus,
+               TokenType.Slash, TokenType.LShift, TokenType.RShift);
+  }
+
+  static void TestTokens(string code, params TokenType[] values)
+  {
+    Compiler compiler = new Compiler();
+    Scanner scanner = new Scanner(compiler, new StringReader(code));
+    Token token;
+    for(int i=0; i<values.Length; i++)
+    {
+      Assert.IsTrue(scanner.NextToken(out token));
+      Assert.AreEqual(values[i], token.Type);
+    }
+    Assert.AreEqual(0, compiler.Messages.Count);
+  }
+  #endregion
+
   #region TestValues
   [Test]
   public void TestValues()
   {
     // test identifiers
-    TestValue("@void", "void");
-    TestValue(@"hel\u0041\U41o", "helAAo");
-    TestValue(@"he\uFFFFFF", "he\uFFFFFF");
+    TestValues(@"@void hel\u0041\U41o he\uFFFFFF", "void", "helAAo", "he\uFFFFFF");
 
     // test characters
-    TestValue(@"'x'", 'x');
-    TestValue(@"'\n'", '\n');
-    TestValue(@"'\x41'", 'A');
+    TestValues(@"'x' '\n' '\x41'", 'x', '\n', 'A');
 
     // test strings
-    TestValue(@"""\r\v\t\b\n55blues\x5f\u1234""", "\r\v\t\b\n55blues\x5f\u1234");
-    TestValue(@"@""hello""""there""", "hello\"there");
-    TestValue(@"@'hello""there''boy'", "hello\"there'boy");
+    TestValues(@"""\r\v\t\b\n55blues\x5f\u1234""", "\r\v\t\b\n55blues\x5f\u1234");
+    TestValues(@"@""hello""""there""", "hello\"there");
+    TestValues(@"@'hello""there''boy'", "hello\"there'boy");
     
     // test integers
-    TestValue("1", 1);
-    TestValue("1u", 1u);
-    TestValue("1ul", 1L);
-    TestValue("1L", 1ul);
-    TestValue("0xffL", (long)255);
-    TestValue("0xffffffff", 0xffffffff);
-    TestValue("0xfffffffff", 0xfffffffff);
-    TestValue("9223372036854775808", 9223372036854775808);
+    TestValues("1 1u 1ul 1L", 1, 1u, 1ul, 1L);
+    TestValues("0xffL 0xffffffff 0xfffffffff", (long)255, 0xffffffff, 0xfffffffff);
+    TestValues("9223372036854775808", 9223372036854775808);
 
     // test floating point numbers
-    TestValue("10e-5f", 10e-5f);
-    TestValue("10e2m", 10e2m);
-    TestValue("10.5m", 10.5m);
-    TestValue("10.25f", 10.25f);
-    TestValue(".5", .5);
-    TestValue(".5m", .5m);
+    TestValues("10e-5f 10.25f .5 7.2d", 10e-5f, 10.25f, .5, 7.2d);
+    TestValues("10e2m 10.5m .5m", 10e2m, 10.5m, .5m);
+
+    // doc comments
+    TestValues("/// <foo></foo>", " <foo></foo>");
   }
 
-  static void TestValue(string code, object value)
+  static void TestValues(string code, params object[] values)
   {
     Compiler compiler = new Compiler();
     Scanner scanner = new Scanner(compiler, new StringReader(code));
     Token token;
-    Assert.IsTrue(scanner.NextToken(out token));
-    Assert.AreEqual(value, token.Data.Value);
+    for(int i=0; i<values.Length; i++)
+    {
+      Assert.IsTrue(scanner.NextToken(out token));
+      Assert.AreEqual(values[i], token.Data.Value);
+      if(values[i] != null) Assert.AreSame(values[i].GetType(), token.Data.Value.GetType());
+    }
     Assert.AreEqual(0, compiler.Messages.Count);
   }
   #endregion
-
-  static Token[] Scan(string code, Compiler compiler)
-  {
-    Scanner scanner = new Scanner(compiler, new StringReader(code));
-    List<Token> tokens = new List<Token>();
-    Token token;
-    while(scanner.NextToken(out token)) tokens.Add(token);
-    return tokens.ToArray();
-  }
 }
 
 } // namespace Scripting.CSharper.Tests
