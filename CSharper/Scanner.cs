@@ -120,8 +120,71 @@ public class Scanner : ScannerBase<Compiler,Token>
       token.SourceName = SourceName;
       token.Start      = Position;
 
+      #region Identifier, keyword, or verbatim string
+      if(char.IsLetter(c) || c == '@' || c == '_' || c == '\\')
+      {
+        bool verbatim = c == '@';
+        if(verbatim)
+        {
+          c = NextChar();
+          if(!char.IsLetter(c) && c != '_' && c != '\\' && c != '"' && c != '\'') // we expect an identifier or string after @
+          {
+            AddMessage(Diagnostic.MisplacedVerbatim);
+            goto continueScanning;
+          }
+        }
+        
+        if(c == '"' || c == '\'') // verbatim string
+        {
+          StringBuilder sb = new StringBuilder();
+          char delim = c;
+          while(true)
+          {
+            c = NextChar();
+            if(c == delim) // if we encounter the delimiter again, end the string unless the delimiter is doubled
+            {
+              if(NextChar() == delim) sb.Append(delim);
+              else break;
+            }
+            else if(c == 0)
+            {
+              AddMessage(Diagnostic.UnterminatedStringLiteral);
+              break;
+            }
+            else
+            {
+              sb.Append(c);
+            }
+          }
+
+          token.Type = TokenType.Literal;
+          token.Data.Value = sb.ToString();
+        }
+        else // identifier
+        {
+          bool hadEscape;
+          string identifier = ReadIdentifier(out hadEscape);
+          if(identifier == null) goto continueScanning;
+
+          if(hadEscape || verbatim || // if it's not a keyword, it's an identifier
+             !keywords.TryGetValue(identifier, out token.Type))
+          {
+            token.Type = TokenType.Identifier;
+            token.Data.Value = identifier;
+          }
+          // if it's a true, false, or null keyword, represent it as a literal token
+          else if(token.Type == TokenType.True || token.Type == TokenType.False || token.Type == TokenType.Null)
+          {
+            token.Type = TokenType.Literal;
+            token.Data.Value = token.Type == TokenType.True ? true : token.Type == TokenType.False ? (object)false : null;
+          }
+        }
+        break;
+      }
+      #endregion
+
       #region Period or Numeric literal
-      if(char.IsDigit(c) || c == '.')
+      else if(char.IsDigit(c) || c == '.')
       {
         if(c == '.')
         {
@@ -169,7 +232,7 @@ public class Scanner : ScannerBase<Compiler,Token>
         else // otherwise, it's either an integer or a real
         {
           StringBuilder sb = new StringBuilder(16);
-          sb.Append(c);
+          sb.Append(c); // we skipped past the first character (c) above, so add the first character
           isInteger = c != '.'; // whether a period has been seen yet
 
           int sawExponent = -1;
@@ -203,12 +266,16 @@ public class Scanner : ScannerBase<Compiler,Token>
           try
           {
             string numberString = sb.ToString();
+            char suffix = char.ToLowerInvariant(Char);
+
+            // check the suffix now so that a number like 5f doesn't trigger the integer case
+            if(suffix == 'f' || suffix == 'm' || suffix == 'd') isInteger = false;
 
             if(isInteger)
             {
               integerValue = ulong.Parse(numberString, CultureInfo.InvariantCulture);
             }
-            else if(char.ToLowerInvariant(Char) == 'm') // a decimal value
+            else if(suffix == 'm') // a decimal value
             {
               realType = typeof(decimal);
               NextChar(); // skip past the suffix
@@ -221,7 +288,7 @@ public class Scanner : ScannerBase<Compiler,Token>
               realType = typeof(double);
               double realValue = double.Parse(numberString, CultureInfo.InvariantCulture);
 
-              if(char.ToLowerInvariant(Char) == 'f') // a 'float' suffix
+              if(suffix == 'f') // a 'float' suffix
               {
                 NextChar();
 
@@ -234,7 +301,7 @@ public class Scanner : ScannerBase<Compiler,Token>
               }
               else
               {
-                if(char.ToLowerInvariant(Char) == 'd') NextChar(); // a 'double' suffix
+                if(suffix == 'd') NextChar(); // a 'double' suffix
                 token.Data.Value = realValue;
               }
               break; // return the token
@@ -264,7 +331,7 @@ public class Scanner : ScannerBase<Compiler,Token>
         
         bool unsigned = false, longFlag = false;
 
-        c = char.ToLowerInvariant(Char);
+        c = char.ToLowerInvariant(Char); // get the suffix, if any
         if(c == 'u') unsigned = true;
         else if(c == 'l')
         {
@@ -272,17 +339,17 @@ public class Scanner : ScannerBase<Compiler,Token>
           longFlag = true;
         }
 
-        if(unsigned || longFlag) // if we got a flag, skip past it and check for another flag
+        if(unsigned || longFlag) // if we got a suffix, skip past it and check for another suffix flag
         {
           NextChar();
           if(unsigned && char.ToLowerInvariant(Char) == 'l') longFlag = true;
           else if(longFlag && char.ToLowerInvariant(Char) == 'u') unsigned = true;
         }
 
-        if(unsigned && longFlag) NextChar(); // if we got a second flag, skip it as well
+        if(unsigned && longFlag) NextChar(); // if we got a second one, skip it as well
 
-        if(integerValue > (ulong)long.MaxValue)
-        {
+        if(integerValue > (ulong)long.MaxValue) // now convert the number to the smallest type able to hold it,
+        {                                       // respecting the user's suffix flags
           token.Data.Value = integerValue;
         }
         else if(integerValue > uint.MaxValue || longFlag)
@@ -297,95 +364,6 @@ public class Scanner : ScannerBase<Compiler,Token>
         {
           token.Data.Value = (int)integerValue;
         }
-
-        break; // return the token
-      }
-      #endregion
-
-      #region Identifier, keyword, or verbatim string
-      else if(char.IsLetter(c) || c == '@' || c == '_' || c == '\\')
-      {
-        bool verbatim = c == '@';
-        if(verbatim)
-        {
-          c = NextChar();
-          if(!char.IsLetter(c) && c != '_' && c != '\\' && c != '"' && c != '\'') // we expect an identifier or string after @
-          {
-            AddMessage(Diagnostic.MisplacedVerbatim);
-            goto continueScanning;
-          }
-        }
-        
-        if(c == '"' || c == '\'') // verbatim string
-        {
-          StringBuilder sb = new StringBuilder();
-          char delim = c;
-          while(true)
-          {
-            c = NextChar();
-            if(c == delim) // if we encounter the delimiter again, end the string unless the delimiter is doubled
-            {
-              if(NextChar() == delim) sb.Append(delim);
-              else break;
-            }
-            else if(c == 0)
-            {
-              AddMessage(Diagnostic.UnterminatedStringLiteral);
-              break;
-            }
-            else
-            {
-              sb.Append(c);
-            }
-          }
-
-          token.Type = TokenType.Literal;
-          token.Data.Value = sb.ToString();
-        }
-        else // identifier
-        {
-          string identifier = ReadIdentifier();
-          if(identifier == null) goto continueScanning;
-
-          if(!verbatim || keywords.TryGetValue(identifier, out token.Type)) // if it's not a keyword, it's an identifier
-          {
-            token.Type = TokenType.Identifier;
-            token.Data.Value = identifier;
-          }
-          // if it's a true, false, or null keyword, represent it as a literal token
-          else if(token.Type == TokenType.True || token.Type == TokenType.False || token.Type == TokenType.Null)
-          {
-            token.Type = TokenType.Literal;
-            token.Data.Value = token.Type == TokenType.True ? true : token.Type == TokenType.False ? (object)false : null;
-          }
-        }
-        break;
-      }
-      #endregion
-
-      #region Character literal
-      else if(c == '\'')
-      {
-        c = NextChar();
-        if(c == '\'') AddMessage(Diagnostic.EmptyCharacterLiteral);
-        else if(c == '\n') AddMessage(Diagnostic.NewlineInConstant);
-        else
-        {
-          if(c == '\\') c = ProcessEscape(true);
-          else NextChar(); // skip after the character
-
-          if(Char != '\'') // if it's not followed immediately by a closing quote, find the closing quote and complain
-          {
-            FilePosition expectedAt = Position;
-            while(Char != '\'' && Char != '\n' && Char != 0) NextChar();
-            if(Char == '\'') AddMessage(Diagnostic.CharacterLiteralTooLong);
-            else AddMessage(Diagnostic.ExpectedCharacter, expectedAt, Diagnostic.CharLiteral('\''));
-          }
-          NextChar(); // skip past the closing quote
-        }
- 
-        token.Type = TokenType.Literal;
-        token.Data.Value = c;
 
         break; // return the token
       }
@@ -426,6 +404,34 @@ public class Scanner : ScannerBase<Compiler,Token>
         }
         token.Type = TokenType.Literal;
         token.Data.Value = sb.ToString();
+        break; // return the token
+      }
+      #endregion
+
+      #region Character literal
+      else if(c == '\'')
+      {
+        c = NextChar();
+        if(c == '\'') AddMessage(Diagnostic.EmptyCharacterLiteral);
+        else if(c == '\n') AddMessage(Diagnostic.NewlineInConstant);
+        else
+        {
+          if(c == '\\') c = ProcessEscape(true);
+          else NextChar(); // skip after the character
+
+          if(Char != '\'') // if it's not followed immediately by a closing quote, find the closing quote and complain
+          {
+            FilePosition expectedAt = Position;
+            while(Char != '\'' && Char != '\n' && Char != 0) NextChar();
+            if(Char == '\'') AddMessage(Diagnostic.CharacterLiteralTooLong);
+            else AddMessage(Diagnostic.ExpectedCharacter, expectedAt, Diagnostic.CharLiteral('\''));
+          }
+          NextChar(); // skip past the closing quote
+        }
+ 
+        token.Type = TokenType.Literal;
+        token.Data.Value = c;
+
         break; // return the token
       }
       #endregion
@@ -625,8 +631,6 @@ public class Scanner : ScannerBase<Compiler,Token>
           case '*': token.Type = TokenType.Asterisk; checkAssign=true; break;
           case '(': token.Type = TokenType.LParen; break;
           case ')': token.Type = TokenType.RParen; break;
-          case '-': token.Type = TokenType.Minus; checkAssign=true; break;
-          case '+': token.Type = TokenType.Plus; checkAssign=true; break;
           case '{': token.Type = TokenType.LCurly; break;
           case '}': token.Type = TokenType.RCurly; break;
           case '[': token.Type = TokenType.LSquare; break;
@@ -635,6 +639,14 @@ public class Scanner : ScannerBase<Compiler,Token>
           case ',': token.Type = TokenType.Comma; break;
           case '.': token.Type = TokenType.Period; break; // this should be handled by the numeric code
 
+          case '-':
+            if(NextChar() == '-') token.Type = TokenType.Decrement;
+            else { token.Type = TokenType.Minus; checkAssign=true; skipChar=false; }
+            break;
+          case '+':
+            if(NextChar() == '+') token.Type = TokenType.Increment;
+            else { token.Type = TokenType.Plus; checkAssign=true; skipChar=false; }
+            break;
           case '=':
             if(NextChar() == '=') token.Type = TokenType.AreEqual;
             else { token.Type = TokenType.Assign; token.Data.Value = TokenType.Equals; skipChar=false; }
@@ -657,10 +669,12 @@ public class Scanner : ScannerBase<Compiler,Token>
             break;
           case '<':
             if(NextChar() == '=') token.Type = TokenType.LessOrEq;
+            else if(Char == '<') { token.Type = TokenType.LShift; checkAssign=true; }
             else { token.Type = TokenType.LessThan; skipChar=false; }
             break;
           case '>':
             if(NextChar() == '=') token.Type = TokenType.GreaterOrEq;
+            else if(Char == '>') { token.Type = TokenType.RShift; checkAssign=true; }
             else { token.Type = TokenType.GreaterThan; skipChar=false; }
             break;
           case '?':
@@ -1003,6 +1017,16 @@ public class Scanner : ScannerBase<Compiler,Token>
   /// <summary>Reads an identifier, assusing the scanner is positioned at one.</summary>
   string ReadIdentifier()
   {
+    bool hadEscape;
+    return ReadIdentifier(out hadEscape);
+  }
+
+  /// <summary>Reads an identifier, assusing the scanner is positioned at one.</summary>
+  /// <param name="hadEscape">A variable that receives whether the identifier had a \uXXXX escape code.</param>
+  string ReadIdentifier(out bool hadEscape)
+  {
+    hadEscape = false;
+
     char c = Char;
     if(!char.IsLetter(c) && c != '_' && c != '\\') return null;
 
@@ -1024,6 +1048,7 @@ public class Scanner : ScannerBase<Compiler,Token>
         }
         sb.Append(ProcessEscape(false));
         c = Char;
+        hadEscape = true;
       }
       else
       {

@@ -160,37 +160,33 @@ struct Diagnostic
     }
   }
 
-  public static readonly Diagnostic UseUppercaseL =
-    Warning(78, 4, "The 'l' suffix is easily confused with the digit '1' -- use 'L' for clarity");
-  public static readonly Diagnostic RealConstantTooLarge =
-    Error(594, "Floating-point constant is outside the range of type '{0}'");
-  public static readonly Diagnostic ExpectedIdentifier = Error(1001, "Identifier expected");
-  public static readonly Diagnostic ExpectedCharacter = Error(1003, "Expected character '{0}'");
-  public static readonly Diagnostic UnrecognizedEscape = Error(1009, "Unrecognized escape sequence starting with '{0}'");
-  public static readonly Diagnostic NewlineInConstant = Error(1010, "Newline in constant");
-  public static readonly Diagnostic EmptyCharacterLiteral = Error(1011, "Empty character literal");
-  public static readonly Diagnostic CharacterLiteralTooLong = Error(1012, "Too many characters in character literal");
-  public static readonly Diagnostic InvalidNumber = Error(1013, "Invalid number");
-  public static readonly Diagnostic IntegralConstantTooLarge = Error(1021, "Integral constant is too large");
-  public static readonly Diagnostic PPDirectiveExpected = Error(1024, "Preprocessor directive expected");
-  public static readonly Diagnostic PPEndExpected = Error(1025, "Single-line comment or end-of-line expected");
-  public static readonly Diagnostic PPEndIfExpected = Error(1027, "#endif directive expected");
-  public static readonly Diagnostic UnexpectedPPDirective = Error(1028, "Unexpected preprocessor directive");
-  public static readonly Diagnostic PPTooLate =
-    Error(1032, "Cannot define/undefine preprocessor symbols after first token in file");
-  public static readonly Diagnostic UnterminatedComment = Error(1035, "Unterminated multiline comment");
-  public static readonly Diagnostic EndRegionExpected = Error(1038, "#endregion directive expected");
+  #region Diagnostics
+  public static readonly Diagnostic UseUppercaseL           = Warning(78,   4, "The lowercase 'l' suffix is easily confused with the digit '1' -- use 'L' for clarity");
+  public static readonly Diagnostic RealConstantTooLarge      = Error(594,  "Floating-point constant is outside the range of type '{0}'");
+  public static readonly Diagnostic ExpectedIdentifier        = Error(1001, "Identifier expected");
+  public static readonly Diagnostic ExpectedCharacter         = Error(1003, "Expected character '{0}'");
+  public static readonly Diagnostic UnrecognizedEscape        = Error(1009, "Unrecognized escape sequence starting with '{0}'");
+  public static readonly Diagnostic NewlineInConstant         = Error(1010, "Newline in constant");
+  public static readonly Diagnostic EmptyCharacterLiteral     = Error(1011, "Empty character literal");
+  public static readonly Diagnostic CharacterLiteralTooLong   = Error(1012, "Too many characters in character literal");
+  public static readonly Diagnostic InvalidNumber             = Error(1013, "Invalid number");
+  public static readonly Diagnostic IntegralConstantTooLarge  = Error(1021, "Integral constant is too large");
+  public static readonly Diagnostic PPDirectiveExpected       = Error(1024, "Preprocessor directive expected");
+  public static readonly Diagnostic PPEndExpected             = Error(1025, "Single-line comment or end-of-line expected");
+  public static readonly Diagnostic PPEndIfExpected           = Error(1027, "#endif directive expected");
+  public static readonly Diagnostic UnexpectedPPDirective     = Error(1028, "Unexpected preprocessor directive");
+  public static readonly Diagnostic PPTooLate                 = Error(1032, "Cannot define/undefine preprocessor symbols after first token in file");
+  public static readonly Diagnostic UnterminatedComment       = Error(1035, "Unterminated multiline comment");
+  public static readonly Diagnostic EndRegionExpected         = Error(1038, "#endregion directive expected");
   public static readonly Diagnostic UnterminatedStringLiteral = Error(1039, "Unterminated string literal");
-  public static readonly Diagnostic PPNotFirstToken =
-    Error(1040, "Preprocessor directives must appear as the first non-whitespace character on a line");
-  public static readonly Diagnostic UnexpectedCharacter = Error(1056, "Unexpected character '{0}'");
-  public static readonly Diagnostic InvalidPPExpression = Error(1517, "Invalid preprocessor expression");
-  public static readonly Diagnostic InvalidLineDirective = Error(1576, "The #line directive is invalid");
-  public static readonly Diagnostic MisplacedVerbatim =
-    Error(1646, "Keyword, identifier, or string expected after verbatim specifier: @");
-  public static readonly Diagnostic UnrecognizedPragma = Warning(1633, 1, "Unrecognized #pragma directive");
-  public static readonly Diagnostic InvalidWarningPragma = Warning(1634, 1, "Expected format #pragma warning disable|restore n,n,...");
-  public static readonly Diagnostic InvalidWarningCode = Warning(1691, 1, "'{0}' is not a valid warning number");
+  public static readonly Diagnostic PPNotFirstToken           = Error(1040, "Preprocessor directives must appear as the first non-whitespace character on a line");
+  public static readonly Diagnostic UnexpectedCharacter       = Error(1056, "Unexpected character '{0}'");
+  public static readonly Diagnostic InvalidPPExpression       = Error(1517, "Invalid preprocessor expression");
+  public static readonly Diagnostic InvalidLineDirective      = Error(1576, "The #line directive is invalid");
+  public static readonly Diagnostic MisplacedVerbatim         = Error(1646, "Keyword, identifier, or string expected after verbatim specifier: @");
+  public static readonly Diagnostic UnrecognizedPragma      = Warning(1633, 1, "Unrecognized #pragma directive");
+  public static readonly Diagnostic InvalidWarningPragma    = Warning(1634, 1, "Expected format #pragma warning disable|restore n,n,...");
+  public static readonly Diagnostic InvalidWarningCode      = Warning(1691, 1, "'{0}' is not a valid warning number");
 
   static Diagnostic Error(int code, string format)
   {
@@ -201,6 +197,7 @@ struct Diagnostic
   {
     return new Diagnostic(OutputMessageType.Warning, code, 1, format);
   }
+  #endregion
 
   static int[] warningCodes;
 }
