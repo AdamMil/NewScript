@@ -79,18 +79,18 @@ public class Scanner : ScannerBase<Compiler,Token>
     }
   }
 
-  /// <summary>Load the given source and push a new set of options onto the option stack.</summary>
-  protected override System.IO.TextReader LoadSource(string name)
+  /// <summary>Reset source-specific state and push a new set of options onto the option stack.</summary>
+  protected override void OnSourceLoaded()
   {
     // reset file-specific state
     ppNesting.Clear();
+    regionDepth    = 0;
     firstOnLine    = true;
     sawNonPP       = false;
     lineOverride   = TokenData.DefaultLine;
     sourceOverride = null;
 
     Compiler.PushOptions();
-    return base.LoadSource(name);
   }
 
   protected override bool ReadToken(out Token token)
@@ -110,6 +110,7 @@ public class Scanner : ScannerBase<Compiler,Token>
       if(c == 0) // we're at the end of this file
       {
         if(ppNesting.Count != 0) AddMessage(Diagnostic.PPEndIfExpected);
+        if(regionDepth != 0) AddMessage(Diagnostic.EndRegionExpected);
         Compiler.PopOptions(); // pop the options we pushed in LoadSource
         NextSource(); // move to the next file (if any)
         token.Type = TokenType.EOF;
@@ -122,22 +123,23 @@ public class Scanner : ScannerBase<Compiler,Token>
       #region Period or Numeric literal
       if(char.IsDigit(c) || c == '.')
       {
-        if(c == '.' && !char.IsDigit(NextChar())) // Period
+        if(c == '.')
         {
-          token.Type = TokenType.Period;
-          break; // return it
+          if(!char.IsDigit(NextChar())) // Period
+          {
+            token.Type = TokenType.Period;
+            break; // return it
+          }
         }
+        else NextChar();
 
         token.Type = TokenType.Literal;
-        
-        char firstChar = Char;
-        NextChar();
 
         bool isInteger;
         ulong integerValue = 0;
         
         // if it started with zero, it might be a hex number 0x...
-        bool isHex = firstChar == '0' && char.ToLowerInvariant(Char) == 'x';
+        bool isHex = c == '0' && char.ToLowerInvariant(Char) == 'x';
         if(isHex) // if it's a hex number, skip the leading 0x
         {
           uint digitValue;
@@ -167,17 +169,25 @@ public class Scanner : ScannerBase<Compiler,Token>
         else // otherwise, it's either an integer or a real
         {
           StringBuilder sb = new StringBuilder(16);
-          isInteger = firstChar != '.'; // whether a period has been seen yet
+          sb.Append(c);
+          isInteger = c != '.'; // whether a period has been seen yet
 
-          bool sawExponent = false;
+          int sawExponent = -1;
           while(true)
           {
             c = char.ToLowerInvariant(Char);
-            if(!char.IsDigit(c) || sawExponent && c == 'e' || !isInteger && c == '.') break;
+            
+            // break if it's not a digit, and it's not 'e' (or it is 'e', but we've already got one), and it's not '.'
+            // (or it is '.' but we've already got one), and it's not '-' (or it is '-', but it's not right after 'e')
+            if(!char.IsDigit(c) && (c != 'e' || sawExponent != -1) && (c != '.' || !isInteger) &&
+               (c != '-' || sb.Length != sawExponent))
+            {
+              break;
+            }
 
             if(c == 'e')
             {
-              sawExponent = true;
+              sawExponent = sb.Length+1;
               isInteger   = false;
             }
             else if(c == '.')
@@ -202,7 +212,8 @@ public class Scanner : ScannerBase<Compiler,Token>
             {
               realType = typeof(decimal);
               NextChar(); // skip past the suffix
-              token.Data.Value = decimal.Parse(numberString, CultureInfo.InvariantCulture);
+              token.Data.Value = sawExponent == -1 ? decimal.Parse(numberString, CultureInfo.InvariantCulture)
+                                   : new decimal(double.Parse(numberString, CultureInfo.InvariantCulture));
               break; // return the token
             }
             else
@@ -221,9 +232,9 @@ public class Scanner : ScannerBase<Compiler,Token>
                 }
                 token.Data.Value = floatValue;
               }
-              else if(char.ToLowerInvariant(Char) == 'd') // a 'double' suffix
+              else
               {
-                NextChar();
+                if(char.ToLowerInvariant(Char) == 'd') NextChar(); // a 'double' suffix
                 token.Data.Value = realValue;
               }
               break; // return the token
@@ -235,8 +246,17 @@ public class Scanner : ScannerBase<Compiler,Token>
           }
           catch(OverflowException)
           {
-            if(isInteger) AddMessage(Diagnostic.IntegralConstantTooLarge, token.Start);
-            else AddMessage(Diagnostic.RealConstantTooLarge, token.Start, Diagnostic.TypeName(realType));
+            if(isInteger)
+            {
+              AddMessage(Diagnostic.IntegralConstantTooLarge, token.Start);
+              token.Data.Value = 0;
+            }
+            else
+            {
+              AddMessage(Diagnostic.RealConstantTooLarge, token.Start, Diagnostic.TypeName(realType));
+              token.Data.Value = 0.0;
+            }
+            break; // return the token
           }
         }
 
@@ -246,7 +266,11 @@ public class Scanner : ScannerBase<Compiler,Token>
 
         c = char.ToLowerInvariant(Char);
         if(c == 'u') unsigned = true;
-        else if(c == 'l') longFlag = true;
+        else if(c == 'l')
+        {
+          if(Char == 'l') AddMessage(Diagnostic.UseUppercaseL);
+          longFlag = true;
+        }
 
         if(unsigned || longFlag) // if we got a flag, skip past it and check for another flag
         {
@@ -343,7 +367,7 @@ public class Scanner : ScannerBase<Compiler,Token>
       else if(c == '\'')
       {
         c = NextChar();
-        if(c == 0) AddMessage(Diagnostic.EmptyCharacterLiteral);
+        if(c == '\'') AddMessage(Diagnostic.EmptyCharacterLiteral);
         else if(c == '\n') AddMessage(Diagnostic.NewlineInConstant);
         else
         {
@@ -353,9 +377,9 @@ public class Scanner : ScannerBase<Compiler,Token>
           if(Char != '\'') // if it's not followed immediately by a closing quote, find the closing quote and complain
           {
             FilePosition expectedAt = Position;
-            do NextChar(); while(Char != '\'' && Char != '\n' && Char != 0);
+            while(Char != '\'' && Char != '\n' && Char != 0) NextChar();
             if(Char == '\'') AddMessage(Diagnostic.CharacterLiteralTooLong);
-            else AddMessage(Diagnostic.ExpectedCharacter, expectedAt, '\'');
+            else AddMessage(Diagnostic.ExpectedCharacter, expectedAt, Diagnostic.CharLiteral('\''));
           }
           NextChar(); // skip past the closing quote
         }
@@ -371,18 +395,34 @@ public class Scanner : ScannerBase<Compiler,Token>
       else if(c == '"')
       {
         StringBuilder sb = new StringBuilder();
+        c = NextChar();
         while(true)
         {
-          c = NextChar();
-          if(c == 0) AddMessage(Diagnostic.UnterminatedStringLiteral);
+          if(c == 0)
+          {
+            AddMessage(Diagnostic.UnterminatedStringLiteral);
+            break;
+          }
           else if(c == '\n')
           {
             AddMessage(Diagnostic.NewlineInConstant);
             break;
           }
-          else if(c == '\\') sb.Append(ProcessEscape(true));
-          else if(c == '"') break;
-          else sb.Append(c);
+          else if(c == '\\')
+          {
+            sb.Append(ProcessEscape(true));
+            c = Char;
+          }
+          else if(c == '"')
+          {
+            NextChar(); // skip the closing quote
+            break;
+          }
+          else
+          {
+            sb.Append(c);
+            c = NextChar();
+          }
         }
         token.Type = TokenType.Literal;
         token.Data.Value = sb.ToString();
@@ -400,7 +440,8 @@ public class Scanner : ScannerBase<Compiler,Token>
           goto continueScanning;
         }
 
-        if(SkipWhitespace(false) == '\n')
+        NextChar(); // skip over the '#'
+        if(SkipWhitespace(false) == '\n' || Char == 0) // skip whitespace after the '#'
         {
           AddMessage(Diagnostic.PPDirectiveExpected);
           goto continueScanning;
@@ -488,8 +529,15 @@ public class Scanner : ScannerBase<Compiler,Token>
             FinishPPLine();
             goto continueScanning;
 
-          case "region": case "endregion":
-            SkipToEOL(); // just ignore these
+          case "region":
+            regionDepth++;
+            SkipToEOL();
+            goto continueScanning;
+
+          case "endregion":
+            if(regionDepth == 0) AddMessage(Diagnostic.UnexpectedPPDirective, token.Start);
+            else regionDepth--;
+            SkipToEOL();
             goto continueScanning;
 
           case "pragma":
@@ -506,7 +554,7 @@ public class Scanner : ScannerBase<Compiler,Token>
               for(int i=0; i<warningStrings.Length; i++)
               {
                 int warningCode;
-                if(!int.TryParse(warningStrings[i], out warningCode) || Diagnostic.IsValidWarning(warningCode))
+                if(!int.TryParse(warningStrings[i], out warningCode) || !Diagnostic.IsValidWarning(warningCode))
                 {
                   AddMessage(Diagnostic.InvalidWarningCode, token.Start, warningStrings[i].Trim());
                 }
@@ -528,7 +576,7 @@ public class Scanner : ScannerBase<Compiler,Token>
 
           case "define": case "undef":
           {
-            if(sawNonPP)
+            if(sawNonPP) // #define and #undef need to come before any non-preprocessor lines in the file
             {
               AddMessage(Diagnostic.PPTooLate, token.Start);
               SkipToEOL();
@@ -536,7 +584,11 @@ public class Scanner : ScannerBase<Compiler,Token>
             }
 
             string name = ReadIdentifier();
-            if(name != null)
+            if(name == null)
+            {
+              AddMessage(Diagnostic.ExpectedIdentifier);
+            }
+            else
             {
               if(sb[0] == 'd') Compiler.Options.Define(name);
               else Compiler.Options.Undefine(name);
@@ -659,7 +711,7 @@ public class Scanner : ScannerBase<Compiler,Token>
             break;
 
           default:
-            AddMessage(Diagnostic.UnexpectedCharacter, token.Start, c);
+            AddMessage(Diagnostic.UnexpectedCharacter, token.Start, Diagnostic.CharLiteral(c));
             break;
         }
 
@@ -757,7 +809,7 @@ public class Scanner : ScannerBase<Compiler,Token>
       lastMatch = m.Index+m.Length;
       m = m.NextMatch();
     }
-    if(m.Index+m.Length != expression.Length) return false; // make sure the entire string was consumed
+    if(lastMatch != expression.Length) return false; // make sure the entire string was consumed
 
     try
     {
@@ -905,24 +957,26 @@ public class Scanner : ScannerBase<Compiler,Token>
   {
     if(skipAChar) NextChar();
 
+    char c;
     switch(Char)
     {
-      case '\'': return '\'';
-      case '"': return '"';
-      case '\\': return '\\';
-      case '0': return '\0';
-      case 'a': return '\a';
-      case 'b': return '\b';
-      case 'f': return '\f';
-      case 'n': return '\n';
-      case 'r': return '\r';
-      case 't': return '\t';
-      case 'v': return '\v';
+      case '\'': c = '\''; break;
+      case '"':  c = '"'; break;
+      case '\\': c = '\\'; break;
+      case '0':  c = '\0'; break;
+      case 'a':  c = '\a'; break;
+      case 'b':  c = '\b'; break;
+      case 'f':  c = '\f'; break;
+      case 'n':  c = '\n'; break;
+      case 'r':  c = '\r'; break;
+      case 't':  c = '\t'; break;
+      case 'v':  c = '\v'; break;
 
       case 'x': case 'u': case 'U': // unicode character specified by up to 4 hex digits (\u1234)
       {
         uint value = 0;
-        for(int i=0; i<4; i++)
+        int i;
+        for(i=0; i<4; i++)
         {
           uint digitValue;
           if(!IsHexDigit(NextChar(), out digitValue))
@@ -932,13 +986,18 @@ public class Scanner : ScannerBase<Compiler,Token>
           }
           value = (value<<4) + digitValue;
         }
+        if(i == 4) NextChar(); // make sure we skip past all hex digits
         return (char)value;
       }
 
       default:
-        AddMessage(Diagnostic.UnrecognizedEscape); // there must be at least one hex digit
-        return 'X'; // return an arbitrary character
+        AddMessage(Diagnostic.UnrecognizedEscape, Position, Diagnostic.CharLiteral(Char));
+        c = 'X'; // return an arbitrary character
+        break;
     }
+
+    NextChar();
+    return c;
   }
 
   /// <summary>Reads an identifier, assusing the scanner is positioned at one.</summary>
@@ -958,20 +1017,20 @@ public class Scanner : ScannerBase<Compiler,Token>
         {
           if(sb.Length == 0) // if we see a backslash all by itself, it's an error
           {
-            AddMessage(Diagnostic.UnexpectedCharacter, start, Char);
+            AddMessage(Diagnostic.UnexpectedCharacter, start, Diagnostic.CharLiteral(Char));
             return null;
           }
           break; // but if we have part of an identifier in 'sb', we'll return it first
         }
         sb.Append(ProcessEscape(false));
+        c = Char;
       }
       else
       {
         sb.Append(c);
+        c = NextChar();
       }
-
-      c = NextChar();
-    } while(char.IsLetterOrDigit(c) || c == '_');
+    } while(char.IsLetterOrDigit(c) || c == '_' || c == '\\');
 
     return sb.ToString();
   }
@@ -1037,6 +1096,8 @@ public class Scanner : ScannerBase<Compiler,Token>
   string sourceOverride;
   /// <summary>The values of evaluating preprocessor #if/#elif tokens.</summary>
   Stack<bool> ppNesting = new Stack<bool>();
+  /// <summary>The depth of nested #regions.</summary>
+  int regionDepth;
   /// <summary>Overrides the current line with this, if it's not equal to <see cref="DefaultLine"/>.</summary>
   int lineOverride;
   /// <summary>Whether this is the first token on the current line.</summary>
@@ -1064,7 +1125,7 @@ public class Scanner : ScannerBase<Compiler,Token>
   static readonly Dictionary<string, TokenType> keywords =
     new Dictionary<string, TokenType>(TokenType.KeywordEnd-TokenType.KeywordStart);
 
-  static readonly Regex lineRe = new Regex(@"^(hidden|default|\d+(?:""([^""]+)"")\s*$",
+  static readonly Regex lineRe = new Regex(@"^(hidden|default|\d+(?:\s*""([^""]+)"")?)\s*$",
                                            RegexOptions.Compiled | RegexOptions.Singleline);
   static readonly Regex ppExprRe =
     new Regex(@"\s*(\|\||&&|==|!=|!|true|false|\w(?:[\w\d]|\\[uU][0-9a-fA-F]{1,4})+)\s*",

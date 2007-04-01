@@ -7,8 +7,8 @@
     <ProjectGuid>{981E143C-C50B-4403-800A-D8D213B1CC8D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>CSharper.Tests</RootNamespace>
-    <AssemblyName>CSharper.Tests</AssemblyName>
+    <RootNamespace>Scripting.CSharper.Tests</RootNamespace>
+    <AssemblyName>Tests</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -36,8 +36,13 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Scanner.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Backend\Scripting.Backend.csproj">
+      <Project>{FE9A78E0-BE8F-46D7-A4E8-A743174C1740}</Project>
+      <Name>Scripting.Backend</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Script.CSharper.csproj">
       <Project>{71E95674-5578-4159-B025-02AD56E5728D}</Project>
       <Name>Script.CSharper</Name>
