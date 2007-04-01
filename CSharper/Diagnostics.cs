@@ -92,7 +92,7 @@ struct Diagnostic
       typeString = "information";
     }
 
-    return string.Format(CultureInfo.InvariantCulture, "{0} CS{1} : {2}", typeString, code, format);
+    return string.Format(CultureInfo.InvariantCulture, "{0} CS{1:D4}: {2}", typeString, code, format);
   }
 
   public string ToString(bool treatWarningAsError, params object[] args)
@@ -103,6 +103,26 @@ struct Diagnostic
   readonly string format;
   readonly OutputMessageType type;
   readonly int code, level;
+
+  /// <summary>Returns a name for the given character suitable for insertion between single quotes.</summary>
+  public static string CharLiteral(char c)
+  {
+    switch(c)
+    {
+      case '\'': return @"\'";
+      case '\\': return @"\\";
+      case '\0':  return @"\0";
+      case '\a':  return @"\a";
+      case '\b':  return @"\b";
+      case '\f':  return @"\f";
+      case '\n':  return @"\n";
+      case '\r':  return @"\r";
+      case '\t':  return @"\t";
+      case '\v':  return @"\v";
+      default:
+        return c < 32 || c > 126 ? "0x"+((int)c).ToString("X") : new string(c, 1);
+    }
+  }
 
   /// <summary>Determines whether the given warning code refers to a valid warning.</summary>
   public static bool IsValidWarning(int code)
@@ -140,11 +160,13 @@ struct Diagnostic
     }
   }
 
+  public static readonly Diagnostic UseUppercaseL =
+    Warning(78, 4, "The 'l' suffix is easily confused with the digit '1' -- use 'L' for clarity");
   public static readonly Diagnostic RealConstantTooLarge =
     Error(594, "Floating-point constant is outside the range of type '{0}'");
   public static readonly Diagnostic ExpectedIdentifier = Error(1001, "Identifier expected");
   public static readonly Diagnostic ExpectedCharacter = Error(1003, "Expected character '{0}'");
-  public static readonly Diagnostic UnrecognizedEscape = Error(1009, "Unrecognized escape sequence");
+  public static readonly Diagnostic UnrecognizedEscape = Error(1009, "Unrecognized escape sequence starting with '{0}'");
   public static readonly Diagnostic NewlineInConstant = Error(1010, "Newline in constant");
   public static readonly Diagnostic EmptyCharacterLiteral = Error(1011, "Empty character literal");
   public static readonly Diagnostic CharacterLiteralTooLong = Error(1012, "Too many characters in character literal");
@@ -157,6 +179,7 @@ struct Diagnostic
   public static readonly Diagnostic PPTooLate =
     Error(1032, "Cannot define/undefine preprocessor symbols after first token in file");
   public static readonly Diagnostic UnterminatedComment = Error(1035, "Unterminated multiline comment");
+  public static readonly Diagnostic EndRegionExpected = Error(1038, "#endregion directive expected");
   public static readonly Diagnostic UnterminatedStringLiteral = Error(1039, "Unterminated string literal");
   public static readonly Diagnostic PPNotFirstToken =
     Error(1040, "Preprocessor directives must appear as the first non-whitespace character on a line");
@@ -166,7 +189,7 @@ struct Diagnostic
   public static readonly Diagnostic MisplacedVerbatim =
     Error(1646, "Keyword, identifier, or string expected after verbatim specifier: @");
   public static readonly Diagnostic UnrecognizedPragma = Warning(1633, 1, "Unrecognized #pragma directive");
-  public static readonly Diagnostic InvalidWarningPragma = Warning(1634, 1, "Expected #pragma warning disable|restore n,n,...");
+  public static readonly Diagnostic InvalidWarningPragma = Warning(1634, 1, "Expected format #pragma warning disable|restore n,n,...");
   public static readonly Diagnostic InvalidWarningCode = Warning(1691, 1, "'{0}' is not a valid warning number");
 
   static Diagnostic Error(int code, string format)

@@ -248,6 +248,7 @@ public abstract class ScannerBase<CompilerType,TokenType>
 
     if(sourceState.DataIndex >= textData.Length) // or, if we've reached the end of input, return the nul character
     {
+      if(sourceState.Char != 0) sourceState.Position.Column++;
       sourceState.Char = '\0';
       return sourceState.Char;
     }
@@ -313,10 +314,15 @@ public abstract class ScannerBase<CompilerType,TokenType>
       sourceState.DataIndex = 0;
       sourceState.LastPosition = sourceState.Position = new FilePosition(1, 0); // the NextChar() will advance to the first column
       savedState = sourceState;
+      OnSourceLoaded();
       NextChar();
       return true;
     }
   }
+
+  /// <summary>Called after a source is loaded.</summary>
+  /// <remarks>Derived classes might override this method to clear per-source state.</remarks>
+  protected virtual void OnSourceLoaded() { }
 
   /// <summary>Reads the next token from the input.</summary>
   /// <returns>Returns true if the next token was read and false if there are no more tokens in any input stream.</returns>
