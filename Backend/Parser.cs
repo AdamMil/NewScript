@@ -29,10 +29,10 @@ public interface IParser
 
 #region ParserBase
 /// <summary>A simple base class for parsers.</summary>
-public abstract class ParserBase<CompilerType,TokenType>
-  : CompilerUserBase<CompilerType>, IParser where CompilerType : CompilerBase
+public abstract class ParserBase<CompilerType,ScannerType,TokenType>
+  : CompilerUserBase<CompilerType>, IParser where CompilerType : CompilerBase where ScannerType : IScanner<TokenType>
 {
-  protected ParserBase(CompilerType compiler, IScanner<TokenType> scanner) : base(compiler)
+  protected ParserBase(CompilerType compiler, ScannerType scanner) : base(compiler)
   {
     if(scanner == null) throw new ArgumentNullException();
     this.scanner = scanner;
@@ -42,19 +42,20 @@ public abstract class ParserBase<CompilerType,TokenType>
   public abstract ASTNode ParseOne();
   public abstract ASTNode ParseExpression();
 
-  protected IScanner<TokenType> Scanner
+  protected ScannerType Scanner
   {
     get { return scanner; }
   }
 
-  readonly IScanner<TokenType> scanner;
+  readonly ScannerType scanner;
 }
 #endregion
 
 #region BufferedParserBase
 /// <summary>A parser base class that provides a configurable lookahead buffer.</summary>
-public abstract class BufferedParserBase<CompilerType,TokenType>
-  : ParserBase<CompilerType,TokenType> where CompilerType : CompilerBase
+public abstract class BufferedParserBase<CompilerType,ScannerType,TokenType>
+  : ParserBase<CompilerType,ScannerType,TokenType>
+    where CompilerType : CompilerBase where ScannerType : IScanner<TokenType>
 {
   /// <summary>A value used to specify an infinitely large lookahead buffer.</summary>
   protected const int Infinite = -1;
@@ -63,8 +64,7 @@ public abstract class BufferedParserBase<CompilerType,TokenType>
   /// <param name="lookahead">The number of tokens to keep in a lookahead buffer. Pass <see cref="Infinite"/> if you
   /// need the entire token stream to be available at once.
   /// </param>
-  protected BufferedParserBase(CompilerType compiler, IScanner<TokenType> scanner, int lookahead)
-    : base(compiler, scanner)
+  protected BufferedParserBase(CompilerType compiler, ScannerType scanner, int lookahead) : base(compiler, scanner)
   {
     if(lookahead == Infinite)
     {

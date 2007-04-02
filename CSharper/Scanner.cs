@@ -46,8 +46,10 @@ public enum TokenType
   /// involved in the assignment (eg, Plus or LShift), or Equals if it was a straight assignment.
   /// </summary>
   Assign,
-  /// <summary>A line from an XML comment.</summary>
-  XmlCommentLine,
+  /// <summary>A section of an XML comment, although not necessarily the entire comment. The values of multiple
+  /// XmlComment tokens should be concatenated with whitespace between them to form the entire XML doc comment.
+  /// </summary>
+  XmlComment,
   /// <summary>The end of the current source file has been reached, but there may be more source files.</summary>
   EOF,
   /// <summary>The end of all source files have been reached.</summary>
@@ -59,6 +61,7 @@ public enum TokenType
 
   // punctuation combinations
   LogAnd, LogOr, LShift, RShift, LessOrEq, GreaterOrEq, AreEqual, NotEqual, Scope, NullCoalesce, Increment, Decrement,
+  Dereference,
 
   // keywords
   KeywordStart,
@@ -189,6 +192,10 @@ public class Scanner : ScannerBase<Compiler,Token>
           {
             token.Data.Value = token.Type == TokenType.True ? true : token.Type == TokenType.False ? (object)false : null;
             token.Type = TokenType.Literal;
+          }
+          else // it's a keyword and already has the right type. we'll set the
+          {    // value to the keyword string to help out with error messages
+            token.Data.Value = identifier;
           }
         }
         break;
@@ -655,6 +662,7 @@ public class Scanner : ScannerBase<Compiler,Token>
 
           case '-':
             if(NextChar() == '-') token.Type = TokenType.Decrement;
+            else if(Char == '>') token.Type = TokenType.Dereference;
             else { token.Type = TokenType.Minus; checkAssign=true; skipChar=false; }
             break;
           case '+':
@@ -707,28 +715,49 @@ public class Scanner : ScannerBase<Compiler,Token>
               else // triple-slash comment -- return the rest as an XML doc line
               {
                 NextChar(); // skip the final slash
-                token.Type  = TokenType.XmlCommentLine;
+                token.Type = TokenType.XmlComment;
                 token.Data.Value = ReadRestOfLine(false);
                 break;
               }
             }
             else if(Char == '*') // multi-line comment
             {
-              NextChar();
+              StringBuilder sb = null;
+              if(NextChar() == '*')
+              {
+                sb = new StringBuilder(); // it's a multi-line xml comment
+                NextChar();
+              }
+
               while(true)
               {
                 if(Char == '*')
                 {
-                  if(NextChar() == '/') break;
+                  if(NextChar() == '/')
+                  {
+                    NextChar();
+                    break;
+                  }
+                  else if(sb != null) sb.Append('*');
                 }
                 else if(Char == 0)
                 {
                   AddMessage(Diagnostic.UnterminatedComment);
                   break;
                 }
-                else NextChar();
+                else
+                {
+                  if(sb != null) sb.Append(Char);
+                  NextChar();
+                }
               }
-              goto continueScanning;
+
+              if(sb == null) goto continueScanning;
+              else
+              {
+                token.Type = TokenType.XmlComment;
+                token.Data.Value = sb.ToString();
+              }
             }
             else
             {

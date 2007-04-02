@@ -132,15 +132,15 @@ public abstract class ScannerBase<CompilerType,TokenType>
     get { return sourceState.Position; }
   }
 
-  /// <summary>Gets the text of the current source stream. You must call <see cref="NextSource"/> at least once before
-  /// this will be valid.
+  /// <summary>Gets the name of the current source. You must call <see cref="NextSource"/> at least once before this
+  /// will be valid.
   /// </summary>
-  public string Source
+  public string SourceName
   {
     get
     {
       AssertValidSource();
-      return textData;
+      return sourceNames == null ? "<unknown>" : sourceNames[sourceIndex];
     }
   }
 
@@ -186,18 +186,6 @@ public abstract class ScannerBase<CompilerType,TokenType>
   protected bool HasValidSource
   {
     get { return textData != null; }
-  }
-
-  /// <summary>Gets the name of the current source. You must call <see cref="NextSource"/> at least once before this
-  /// will be valid.
-  /// </summary>
-  protected string SourceName
-  {
-    get
-    {
-      AssertValidSource();
-      return sourceNames == null ? "<unknown>" : sourceNames[sourceIndex];
-    }
   }
 
   /// <summary>Adds a new error message using the current source name and position.</summary>

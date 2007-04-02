@@ -24,6 +24,8 @@ public struct Diagnostic
     // verify that all diagnostic codes are unique, and gather a list of warning codes
     #if DEBUG
     System.Collections.Generic.List<int> codes = new System.Collections.Generic.List<int>();
+    int[] exceptions = new int[] { 1003 };
+    Array.Sort(exceptions);
     #endif
     System.Collections.Generic.List<int> warnings = new System.Collections.Generic.List<int>();
     foreach(System.Reflection.FieldInfo field in typeof(Diagnostic).GetFields())
@@ -37,7 +39,7 @@ public struct Diagnostic
         {
           codes.Insert(~index, diag.code);
         }
-        else
+        else if(Array.BinarySearch(exceptions, diag.code) < 0)
         {
           throw new InvalidOperationException("Duplicated diagnostic codes!");
         }
@@ -164,7 +166,9 @@ public struct Diagnostic
   public static readonly Diagnostic UseUppercaseL           = Warning(78,   4, "The lowercase 'l' suffix is easily confused with the digit '1' -- use 'L' for clarity");
   public static readonly Diagnostic RealConstantTooLarge      = Error(594,  "Floating-point constant is outside the range of type '{0}'");
   public static readonly Diagnostic ExpectedIdentifier        = Error(1001, "Identifier expected");
+  public static readonly Diagnostic ExpectedSemicolon         = Error(1002, "; expected");
   public static readonly Diagnostic ExpectedCharacter         = Error(1003, "Expected character '{0}'");
+  public static readonly Diagnostic ExpectedSyntax            = Error(1003, "Syntax error, '{0}' expected");
   public static readonly Diagnostic UnrecognizedEscape        = Error(1009, "Unrecognized escape sequence starting with '{0}'");
   public static readonly Diagnostic NewlineInConstant         = Error(1010, "Newline in constant");
   public static readonly Diagnostic EmptyCharacterLiteral     = Error(1011, "Empty character literal");
@@ -182,6 +186,7 @@ public struct Diagnostic
   public static readonly Diagnostic EndRegionExpected         = Error(1038, "#endregion directive expected");
   public static readonly Diagnostic UnterminatedStringLiteral = Error(1039, "Unterminated string literal");
   public static readonly Diagnostic PPNotFirstToken           = Error(1040, "Preprocessor directives must appear as the first non-whitespace character on a line");
+  public static readonly Diagnostic ExpectedIdentGotKeyword   = Error(1041, "Expected an identifier, but got keyword '{0}'");
   public static readonly Diagnostic UnexpectedCharacter       = Error(1056, "Unexpected character '{0}'");
   public static readonly Diagnostic InvalidPPExpression       = Error(1517, "Invalid preprocessor expression");
   public static readonly Diagnostic InvalidLineDirective      = Error(1576, "The #line directive is invalid");
