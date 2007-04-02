@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("C#r (CSharper) reference compiler.")]
-[assembly: AssemblyDescription("The reference implementation of a compiler for the C#r language.")]
+[assembly: AssemblyTitle("C#er (CSharper) reference compiler.")]
+[assembly: AssemblyDescription("The reference implementation of a compiler for the C#er language.")]
 #if DEBUG
 [assembly: AssemblyConfiguration("Debug")]
 #else
