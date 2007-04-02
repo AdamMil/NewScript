@@ -123,15 +123,15 @@ public class ScannerTest
                TokenType.Identifier, TokenType.Identifier, TokenType.Void, TokenType.EOF);
     TestTokens("1 .5 5m 'a' \"xx\" null true false", TokenType.Literal, TokenType.Literal, TokenType.Literal,
                TokenType.Literal, TokenType.Literal, TokenType.Literal, TokenType.Literal, TokenType.Literal);
-    TestTokens("/// <foo></foo>", TokenType.XmlCommentLine);
+    TestTokens("/** foo */ 1 /// <foo></foo>", TokenType.XmlComment, TokenType.Literal, TokenType.XmlComment);
     TestTokens("~ ! % ^ & | * ( ) - + { } [ ] : ; , . < > / ?", TokenType.Tilde, TokenType.Bang, TokenType.Percent,
                TokenType.Caret, TokenType.Ampersand, TokenType.Pipe, TokenType.Asterisk, TokenType.LParen,
                TokenType.RParen, TokenType.Minus, TokenType.Plus, TokenType.LCurly, TokenType.RCurly,
                TokenType.LSquare, TokenType.RSquare, TokenType.Colon, TokenType.Semicolon, TokenType.Comma,
                TokenType.Period, TokenType.LessThan, TokenType.GreaterThan, TokenType.Slash, TokenType.Question);
-    TestTokens("&& || << >> <= >= == != :: ?? ++ --", TokenType.LogAnd, TokenType.LogOr, TokenType.LShift,
+    TestTokens("&& || << >> <= >= == != :: ?? ++ -- ->", TokenType.LogAnd, TokenType.LogOr, TokenType.LShift,
                TokenType.RShift, TokenType.LessOrEq, TokenType.GreaterOrEq, TokenType.AreEqual, TokenType.NotEqual,
-               TokenType.Scope, TokenType.NullCoalesce, TokenType.Increment, TokenType.Decrement);
+               TokenType.Scope, TokenType.NullCoalesce, TokenType.Increment, TokenType.Decrement, TokenType.Dereference);
     TestTokens("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.Assign, TokenType.Assign, TokenType.Assign,
                TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign,
                TokenType.Assign, TokenType.Assign, TokenType.Assign);
@@ -184,6 +184,7 @@ public class ScannerTest
 
     // doc comments
     TestValues("/// <foo></foo>", " <foo></foo>");
+    TestValues("1 /* foo */ 2 /** foo foo * */", 1, 2, " foo foo * ");
   }
 
   static void TestValues(string code, params object[] values)
