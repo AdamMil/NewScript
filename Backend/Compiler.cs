@@ -28,13 +28,12 @@ public class Compiler<OptionType> : CompilerBase where OptionType : CompilerOpti
 
 public class CompilerOptions
 {
-  public bool Optimized, Debug, TreatWarningsAsErrors;
+  public bool Optimized, Debug;
 
   protected void CloneTo(CompilerOptions options)
   {
     options.Optimized = Optimized;
     options.Debug = Debug;
-    options.TreatWarningsAsErrors = TreatWarningsAsErrors;
   }
 }
 

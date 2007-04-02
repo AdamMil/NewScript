@@ -5,7 +5,8 @@ using Scripting.AST;
 namespace Scripting.CSharper
 {
 
-struct Diagnostic
+/// <summary>This class represents a single diagnostic message, and contains static members for all valid messages.</summary>
+public struct Diagnostic
 {
   Diagnostic(OutputMessageType type, int code, int level, string format)
   {
@@ -110,15 +111,14 @@ struct Diagnostic
     switch(c)
     {
       case '\'': return @"\'";
-      case '\\': return @"\\";
-      case '\0':  return @"\0";
-      case '\a':  return @"\a";
-      case '\b':  return @"\b";
-      case '\f':  return @"\f";
-      case '\n':  return @"\n";
-      case '\r':  return @"\r";
-      case '\t':  return @"\t";
-      case '\v':  return @"\v";
+      case '\0': return @"\0";
+      case '\a': return @"\a";
+      case '\b': return @"\b";
+      case '\f': return @"\f";
+      case '\n': return @"\n";
+      case '\r': return @"\r";
+      case '\t': return @"\t";
+      case '\v': return @"\v";
       default:
         return c < 32 || c > 126 ? "0x"+((int)c).ToString("X") : new string(c, 1);
     }
@@ -175,6 +175,8 @@ struct Diagnostic
   public static readonly Diagnostic PPEndExpected             = Error(1025, "Single-line comment or end-of-line expected");
   public static readonly Diagnostic PPEndIfExpected           = Error(1027, "#endif directive expected");
   public static readonly Diagnostic UnexpectedPPDirective     = Error(1028, "Unexpected preprocessor directive");
+  public static readonly Diagnostic UserError                 = Error(1029, "#error: '{0}'");
+  public static readonly Diagnostic UserWarning             = Warning(1030, 1, "#warning: '{0}'");
   public static readonly Diagnostic PPTooLate                 = Error(1032, "Cannot define/undefine preprocessor symbols after first token in file");
   public static readonly Diagnostic UnterminatedComment       = Error(1035, "Unterminated multiline comment");
   public static readonly Diagnostic EndRegionExpected         = Error(1038, "#endregion directive expected");
