@@ -6,23 +6,102 @@ using Scripting;
 namespace Scripting.AST
 {
 
-#region FilePosition
-/// <summary>Represents a position within a source file.</summary>
-public struct FilePosition
+#region Position
+/// <summary>This struct represents a position within a text document.</summary>
+public struct Position
 {
-  public FilePosition(int line, int column)
+  /// <summary>Initializes the position with the given line and column.</summary>
+  public Position(int line, int column)
   {
     Line   = line;
     Column = column;
   }
 
+  /// <summary>Converts the position to a human-readable string.</summary>
   public override string ToString()
   {
-    return Line.ToString() + ":" + Column.ToString();
+    return Line.ToString() + "," + Column.ToString();
   }
 
   /// <summary>The one-based line or column index.</summary>
   public int Line, Column;
+}
+#endregion
+
+#region Span
+/// <summary>This struct represents a span within a text document.</summary>
+public struct Span
+{
+  /// <summary>Initializes the span from two positions.</summary>
+  public Span(Position start, Position end)
+  {
+    Start = start;
+    End   = end;
+  }
+
+  /// <summary>Converts the span to a human-readable string.</summary>
+  public override string ToString()
+  {
+    return Start.ToString() + " - " + End.ToString();
+  }
+
+  /// <summary>The start or end position in the span.</summary>
+  public Position Start, End;
+}
+#endregion
+
+#region FilePosition
+/// <summary>This struct represents a position within a source file.</summary>
+public struct FilePosition
+{
+  /// <summary>Initializes the file position from a source name and a position within the source.</summary>
+  public FilePosition(string sourceName, Position position)
+  {
+    Position   = position;
+    SourceName = sourceName;
+  }
+
+  /// <summary>Converts the file position to a human-readable string.</summary>
+  public override string ToString()
+  {
+    return SourceName+"(" + Position.ToString() + ")";
+  }
+
+  /// <summary>The name of the source file.</summary>
+  public string SourceName;
+  /// <summary>The position within the source file.</summary>
+  public Position Position;
+}
+#endregion
+
+#region FileSpan
+/// <summary>This struct represents a span within a source file.</summary>
+public struct FileSpan
+{
+  /// <summary>Initializes this file span from a source name and the start and end positions within it.</summary>
+  public FileSpan(string sourceName, Position start, Position end)
+  {
+    Span       = new Span(start, end);
+    SourceName = sourceName;
+  }
+
+  /// <summary>Initializes this file span with a file name and a span.</summary>
+  public FileSpan(string sourceName, Span span)
+  {
+    Span       = span;
+    SourceName = sourceName;
+  }
+
+  /// <summary>Converts the file span to a human-readable string.</summary>
+  public override string ToString()
+  {
+    return SourceName+"("+Span.ToString()+")";
+  }
+
+  /// <summary>The source file name.</summary>
+  public string SourceName;
+  /// <summary>The span within the source file.</summary>
+  public Span Span;
 }
 #endregion
 
@@ -38,16 +117,17 @@ public struct Token<TokenType,ValueType>
   /// </summary>
   public string SourceName;
   /// <summary>The start position of the token's span within the file.</summary>
-  public FilePosition Start;
+  public Position Start;
   /// <summary>The end position of the token's span within the file. The end position is inclusive, pointing to the
   /// last character of the token.
   /// </summary>
-  public FilePosition End;
+  public Position End;
   /// <summary>An arbitrary value associated with this token. For instance, numeric tokens might pass the numeric value
   /// in this field.
   /// </summary>
   public ValueType Data;
 
+  /// <summary>Returns the <see cref="Type"/> field, converted to a string.</summary>
   public override string ToString()
   {
     return Convert.ToString(Type);
@@ -75,7 +155,7 @@ public interface IScanner<TokenType>
 #region ScannerBase
 /// <summary>Provides a helper class for implementing scanners.</summary>
 /// <remarks>You are not required to use this class when you implement scanners. This class exists only to provide a
-/// part of the <see cref="IScanner"/> implementation.
+/// part of the <see cref="IScanner{T}"/> implementation.
 /// </remarks>
 public abstract class ScannerBase<CompilerType,TokenType>
   : CompilerUserBase<CompilerType>, IScanner<TokenType> where CompilerType : CompilerBase
@@ -93,7 +173,6 @@ public abstract class ScannerBase<CompilerType,TokenType>
   /// <summary>Initializes the scanner with a list of streams. The source names of the streams will be
   /// "&lt;unknown&gt;".
   /// </summary>
-  /// <param name="sources"></param>
   protected ScannerBase(CompilerType compiler, params TextReader[] sources) : base(compiler)
   {
     if(sources == null) throw new ArgumentNullException();
@@ -127,7 +206,7 @@ public abstract class ScannerBase<CompilerType,TokenType>
   }
 
   /// <summary>Gets the current position within the source file.</summary>
-  public FilePosition Position
+  public Position Position
   {
     get { return sourceState.Position; }
   }
@@ -175,14 +254,12 @@ public abstract class ScannerBase<CompilerType,TokenType>
   }
 
   /// <summary>Gets the position of the previous character within the source file.</summary>
-  protected FilePosition LastPosition
+  protected Position LastPosition
   {
     get { return sourceState.LastPosition; }
   }
 
-  /// <summary>Gets whether a source is loaded and whether <see cref="Source"/>, <see cref="SourceName"/>, etc are
-  /// valid.
-  /// </summary>
+  /// <summary>Gets whether a source is loaded and whether <see cref="SourceName"/>, etc are valid.</summary>
   protected bool HasValidSource
   {
     get { return textData != null; }
@@ -195,7 +272,7 @@ public abstract class ScannerBase<CompilerType,TokenType>
   }
 
   /// <summary>Adds a new error message using the current source name and the given position.</summary>
-  protected void AddErrorMessage(FilePosition position, string message)
+  protected void AddErrorMessage(Position position, string message)
   {
     AddErrorMessage(SourceName, position, message);
   }
@@ -271,8 +348,8 @@ public abstract class ScannerBase<CompilerType,TokenType>
   }
 
   /// <summary>Advances to the next input stream and calls <see cref="NextChar"/> on it.</summary>
-  /// <returns>Returns true if <see cref="CurrentStream"/> has been set to the next input source and false if all
-  /// input sources have been consumed.
+  /// <returns>Returns true if the current data has been set to the next input source and false if all input sources
+  /// have been consumed.
   /// </returns>
   protected bool NextSource()
   {
@@ -300,7 +377,7 @@ public abstract class ScannerBase<CompilerType,TokenType>
       }
       
       sourceState.DataIndex = 0;
-      sourceState.LastPosition = sourceState.Position = new FilePosition(1, 0); // the NextChar() will advance to the first column
+      sourceState.LastPosition = sourceState.Position = new Position(1, 0); // the NextChar() will advance to the first column
       savedState = sourceState;
       OnSourceLoaded();
       NextChar();
@@ -355,7 +432,7 @@ public abstract class ScannerBase<CompilerType,TokenType>
 
   struct State
   {
-    public FilePosition Position, LastPosition;
+    public Position Position, LastPosition;
     public int DataIndex;
     public char Char;
     public bool AtEOL;

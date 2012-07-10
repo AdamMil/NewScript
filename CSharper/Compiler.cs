@@ -6,23 +6,28 @@ namespace Scripting.CSharper
 {
 
 #region Compiler
+/// <summary>This class represents the CSharper (C#er) compiler.</summary>
 public class Compiler : Scripting.AST.Compiler<CompilerOptions>
 {
   /// <summary>The number of items we can store in the options stack before it goes bust.</summary>
   const int StackCapacity = 4;
 
-  public CompilerOptions PushOptions()
+  /// <summary>
+  /// Pushes a new set of compiler options, with values inherited from the current set, onto the options stack.
+  /// </summary>
+  public void PushOptions()
   {
     if(optionDepth == StackCapacity) throw new InvalidOperationException("The option stack is full.");
     optionDepth++;
-    return options = new CompilerOptions(options);
+    options = new CompilerOptions(options);
   }
 
-  public CompilerOptions PopOptions()
+  /// <summary>Pops the topmost set of compiler options from the options stack.</summary>
+  public void PopOptions()
   {
     if(optionDepth == 0) throw new InvalidOperationException("The option stack is empty.");
     optionDepth--;
-    return options = options.Parent;
+    options = options.Parent;
   }
 
   /// <summary>How many <see cref="CompilerOptions"/> have been pushed onto the option stack.</summary>
@@ -31,10 +36,15 @@ public class Compiler : Scripting.AST.Compiler<CompilerOptions>
 #endregion
 
 #region CompilerOptions
+/// <summary>This class represents the compiler options for the C#er language.</summary>
 public class CompilerOptions : Scripting.AST.CompilerOptions
 {
+  /// <summary>Initializes the class with a default set of compiler options.</summary>
   public CompilerOptions() { }
 
+  /// <summary>Initializes the class with a set of compiler options inherited from the given
+  /// <see cref="CompilerOptions"/> object.
+  /// </summary>
   public CompilerOptions(CompilerOptions parent)
   {
     parent.CloneTo(this);
