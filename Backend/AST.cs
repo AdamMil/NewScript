@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Scripting.AST
 {
@@ -16,7 +17,7 @@ public abstract class ASTNode
   /// <summary>The name of the source to which this node corresponds.</summary>
   public string SourceName;
   /// <summary>The span within the source corresponding to this node.</summary>
-  public FilePosition Start, End;
+  public Position Start, End;
 
   /// <summary>Adds a list of items to the end of the sibling list for this node.</summary>
   /// <param name="itemList">A non-null list of items to add to the <see cref="Next"/> list for this node.</param>
@@ -28,11 +29,19 @@ public abstract class ASTNode
   /// <summary>Sets the <see cref="SourceName"/>, <see cref="Start"/>, and <see cref="End"/> fields to the given
   /// values.
   /// </summary>
-  public void SetSpan(string sourceName, FilePosition start, FilePosition end)
+  public void SetSpan(string sourceName, Position start, Position end)
   {
     this.sourceName = sourceName;
     this.start      = start;
     this.end        = end;
+  }
+
+  /// <summary>Sets the <see cref="SourceName"/>, <see cref="Start"/>, and <see cref="End"/> fields to span.</summary>
+  public void SetSpan(FileSpan span)
+  {
+    this.sourceName = span.SourceName;
+    this.start      = span.Span.Start;
+    this.end        = span.Span.End;
   }
 
   /// <summary>Adds the given items to the end of the linked list formed by <paramref name="node"/>. If
@@ -49,6 +58,16 @@ public abstract class ASTNode
     else node.FindLastSibling().Next = itemList;
   }
 
+  /// <summary>Enumerates all of the nodes in the given list, which can be null.</summary>
+  public static IEnumerable<ASTNode> Enumerate(ASTNode list)
+  {
+    while(list != null)
+    {
+      yield return list;
+      list = list.next;
+    }
+  }
+
   /// <summary>Finds the last node in the list. If there are no siblings beyond this one, this node will be returned.</summary>
   ASTNode FindLastSibling()
   {
@@ -59,7 +78,7 @@ public abstract class ASTNode
 
   ASTNode next;
   string sourceName;
-  FilePosition start, end;
+  Position start, end;
 }
 
 } // namespace Scripting.AST

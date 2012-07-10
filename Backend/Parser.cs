@@ -32,16 +32,22 @@ public interface IParser
 public abstract class ParserBase<CompilerType,ScannerType,TokenType>
   : CompilerUserBase<CompilerType>, IParser where CompilerType : CompilerBase where ScannerType : IScanner<TokenType>
 {
+  /// <summary>Initializes the parser with a scanner and a compiler (presumably the same compiler as used by the
+  /// scanner).
+  /// </summary>
   protected ParserBase(CompilerType compiler, ScannerType scanner) : base(compiler)
   {
     if(scanner == null) throw new ArgumentNullException();
     this.scanner = scanner;
   }
 
+  #pragma warning disable 1591
   public abstract ASTNode ParseProgram();
   public abstract ASTNode ParseOne();
   public abstract ASTNode ParseExpression();
+  #pragma warning restore 1591
 
+  /// <summary>Gets the scanner that was passed to the constructor of the parser.</summary>
   protected ScannerType Scanner
   {
     get { return scanner; }
@@ -61,6 +67,10 @@ public abstract class BufferedParserBase<CompilerType,ScannerType,TokenType>
   protected const int Infinite = -1;
 
   /// <summary>Initializes this parser and advances it to the first token.</summary>
+  /// <param name="compiler">
+  /// The compiler instance that is controlling the parse and to which errors should be reported.
+  /// </param>
+  /// <param name="scanner">The scanner from which tokens should be read.</param>
   /// <param name="lookahead">The number of tokens to keep in a lookahead buffer. Pass <see cref="Infinite"/> if you
   /// need the entire token stream to be available at once.
   /// </param>
@@ -103,6 +113,24 @@ public abstract class BufferedParserBase<CompilerType,ScannerType,TokenType>
     {
       EnsureLookahead(lookahead);
       return tokenBuffer[GetIndex(lookahead)];
+    }
+  }
+
+  /// <summary>Gets a token from the lookahead buffer.</summary>
+  /// <param name="lookahead">The distance to look ahead. If equal to zero, this method simply returns
+  /// <see cref="Token"/>.
+  /// </param>
+  /// <param name="token">A variable that receives the specified token.</param>
+  protected void GetToken(int lookahead, out TokenType token)
+  {
+    if(lookahead == 0)
+    {
+      token = Token;
+    }
+    else
+    {
+      EnsureLookahead(lookahead);
+      token = tokenBuffer[GetIndex(lookahead)];
     }
   }
 

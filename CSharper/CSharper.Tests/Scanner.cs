@@ -132,9 +132,9 @@ public class ScannerTest
     TestTokens("&& || << >> <= >= == != :: ?? ++ -- ->", TokenType.LogAnd, TokenType.LogOr, TokenType.LShift,
                TokenType.RShift, TokenType.LessOrEq, TokenType.GreaterOrEq, TokenType.AreEqual, TokenType.NotEqual,
                TokenType.Scope, TokenType.NullCoalesce, TokenType.Increment, TokenType.Decrement, TokenType.Dereference);
-    TestTokens("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.Assign, TokenType.Assign, TokenType.Assign,
-               TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign, TokenType.Assign,
-               TokenType.Assign, TokenType.Assign, TokenType.Assign);
+    TestTokens("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.OpAssign, TokenType.OpAssign, TokenType.OpAssign,
+               TokenType.OpAssign, TokenType.OpAssign, TokenType.OpAssign, TokenType.OpAssign, TokenType.OpAssign,
+               TokenType.OpAssign, TokenType.OpAssign, TokenType.OpAssign);
     TestValues("= %= ^= &= |= *= -= += /= <<= >>=", TokenType.Equals, TokenType.Percent, TokenType.Caret,
                TokenType.Ampersand, TokenType.Pipe, TokenType.Asterisk, TokenType.Minus, TokenType.Plus,
                TokenType.Slash, TokenType.LShift, TokenType.RShift);

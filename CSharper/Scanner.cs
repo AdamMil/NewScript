@@ -32,6 +32,7 @@ public struct TokenData
 #endregion
 
 #region TokenType
+#pragma warning disable 1591 // no XML comments
 /// <summary>This enum represents the tokens that can form part of a C#er program.</summary>
 public enum TokenType
 {
@@ -42,14 +43,10 @@ public enum TokenType
   /// "set" of property accessors.
   /// </summary>
   Identifier,
-  /// <summary>A token signifying assignment. The token's value will be another TokenType that specifies the operator
-  /// involved in the assignment (eg, Plus or LShift), or Equals if it was a straight assignment.
+  /// <summary>A token signifying assignment with an operator. The token's value will be another TokenType that
+  /// specifies the operator involved in the assignment (eg, Plus or LShift).
   /// </summary>
-  Assign,
-  /// <summary>A section of an XML comment, although not necessarily the entire comment. The values of multiple
-  /// XmlComment tokens should be concatenated with whitespace between them to form the entire XML doc comment.
-  /// </summary>
-  XmlComment,
+  OpAssign,
   /// <summary>The end of the current source file has been reached, but there may be more source files.</summary>
   EOF,
   /// <summary>The end of all source files have been reached.</summary>
@@ -65,23 +62,37 @@ public enum TokenType
 
   // keywords
   KeywordStart,
-  Abstract=KeywordStart, As, Base, Bool, Break, Byte, Case, Catch, Char, Checked, Class, Const, Continue, Decimal,
-  Default, Delegate, Do, Double, Else, Enum, Event, Explicit, Extern, False, Finally, Fixed, Float, For, ForEach,
-  Goto, If, Implicit, In, Int, Interface, Internal, Is, Lock, Long, Namespace, New, Null, Object, Operator, Out,
-  Override, Params, Private, Protected, Public, Readonly, Ref, Return, Sbyte, Sealed, Short, SizeOf, StackAlloc,
-  Static, String, Struct, Switch, This, Throw, True, Try, TypeOf, Uint, Ulong, Unchecked, Unsafe, Ushort, Using,
-  Virtual, Void, Volatile, While, KeywordEnd
+  
+  // modifier keywords
+  ModifierStart=KeywordStart,
+  Abstract=ModifierStart, Const, Explicit, Extern, Fixed, Implicit, Internal, New, Override, Private, Protected,
+  Public, ReadOnly, Sealed, Static, Unsafe, Virtual, Volatile, ModifierEnd,
+
+  // type keywords
+  TypeStart=ModifierEnd, Bool=TypeStart, Char, Decimal, Double, Float, Object, String, Void, EnumTypeStart,
+  Byte=EnumTypeStart, Int, Long, Sbyte, Short, Uint, Ulong, Ushort, TypeEnd,
+
+  // declaration keywords
+  DeclStart=TypeEnd, Class=DeclStart, Delegate, Enum, Event, Interface, Namespace, Struct, DeclEnd,
+
+  // other keywords
+  As=DeclEnd, Base, Break, Case, Catch, Checked, Continue, Default, Do, Else, False, Finally, For, ForEach, Goto, If,
+  In, Is, Lock, Null, Out, Params, Ref, Return, SizeOf, StackAlloc, Switch, This, Throw, True, Try, TypeOf, Unchecked,
+  Using, While, KeywordEnd
 }
+#pragma warning restore 1591 // no XML comments
 #endregion
 
 #region Scanner
 /// <summary>This class will convert C#er source code into a stream of tokens.</summary>
 public class Scanner : ScannerBase<Compiler,Token>
 {
+  #pragma warning disable 1591 // no XML comments
   public Scanner(Compiler compiler, params string[] sourceNames) : base(compiler, sourceNames) { }
   public Scanner(Compiler compiler, params System.IO.TextReader[] sources) : base(compiler, sources) { }
   public Scanner(Compiler compiler, System.IO.TextReader[] sources, string[] sourceNames)
     : base(compiler, sources, sourceNames) { }
+  #pragma warning restore 1591 // no XML comments
 
   static Scanner()
   {
@@ -92,20 +103,42 @@ public class Scanner : ScannerBase<Compiler,Token>
     }
   }
 
+  /// <summary>Gets the XML comment that has accumulated so far.</summary>
+  public string XmlComment
+  {
+    get { return xmlComment; }
+  }
+
+  /// <summary>Gets the starting position of the current XML comment.</summary>
+  public Position XmlCommentStart
+  {
+    get { return xmlCommentStart; }
+  }
+
+  /// <summary>Removes the accumulated XML comment.</summary>
+  public void ClearXmlComment()
+  {
+    xmlComment      = null;
+    xmlCommentStart = Position;
+  }
+
   /// <summary>Reset source-specific state and push a new set of options onto the option stack.</summary>
   protected override void OnSourceLoaded()
   {
     // reset file-specific state
     ppNesting.Clear();
-    regionDepth    = 0;
-    firstOnLine    = true;
-    sawNonPP       = false;
-    lineOverride   = TokenData.DefaultLine;
-    sourceOverride = null;
+    regionDepth     = 0;
+    firstOnLine     = true;
+    sawNonPP        = false;
+    lineOverride    = TokenData.DefaultLine;
+    sourceOverride  = null;
+    ClearXmlComment();
 
     Compiler.PushOptions();
   }
 
+  /// <summary>Reads the next token.</summary>
+  /// <returns>True if a token was read, and false if all tokens have been consumed.</returns>
   protected override bool ReadToken(out Token token)
   {
     token = new Token();
@@ -440,7 +473,7 @@ public class Scanner : ScannerBase<Compiler,Token>
 
           if(Char != '\'') // we should now be at the closing quote. if not, complain
           {
-            FilePosition expectedAt = Position; // save the position for the error message
+            Position expectedAt = Position; // save the position for the error message
             while(Char != '\'' && Char != '\n' && Char != 0) NextChar();
             // if we found the end, complain that it's too long. otherwise, complain that we couldn't find it
             if(Char == '\'') AddMessage(Diagnostic.CharacterLiteralTooLong);
@@ -671,7 +704,7 @@ public class Scanner : ScannerBase<Compiler,Token>
             break;
           case '=':
             if(NextChar() == '=') token.Type = TokenType.AreEqual;
-            else { token.Type = TokenType.Assign; token.Data.Value = TokenType.Equals; skipChar=false; }
+            else { token.Type = TokenType.Equals; skipChar=false; }
             break;
           case '!':
             if(NextChar() == '=') token.Type = TokenType.NotEqual;
@@ -710,15 +743,13 @@ public class Scanner : ScannerBase<Compiler,Token>
               if(NextChar() != '/') // not a triple-slash comment
               {
                 SkipToEOL();
-                goto continueScanning;
               }
               else // triple-slash comment -- return the rest as an XML doc line
               {
                 NextChar(); // skip the final slash
-                token.Type = TokenType.XmlComment;
-                token.Data.Value = ReadRestOfLine(false);
-                break;
+                AppendComment(Position, ReadRestOfLine(false));
               }
+              goto continueScanning;
             }
             else if(Char == '*') // multi-line comment
             {
@@ -729,6 +760,7 @@ public class Scanner : ScannerBase<Compiler,Token>
                 NextChar();
               }
 
+              Position commentStart = Position;
               while(true)
               {
                 if(Char == '*')
@@ -752,12 +784,8 @@ public class Scanner : ScannerBase<Compiler,Token>
                 }
               }
 
-              if(sb == null) goto continueScanning;
-              else
-              {
-                token.Type = TokenType.XmlComment;
-                token.Data.Value = sb.ToString();
-              }
+              if(sb != null) AppendComment(commentStart, sb.ToString());
+              goto continueScanning;
             }
             else
             {
@@ -777,7 +805,7 @@ public class Scanner : ScannerBase<Compiler,Token>
         if(checkAssign && Char == '=')
         {
           token.Data.Value = token.Type;
-          token.Type = TokenType.Assign;
+          token.Type = TokenType.OpAssign;
           NextChar();
         }
 
@@ -806,17 +834,31 @@ public class Scanner : ScannerBase<Compiler,Token>
   }
 
   /// <summary>Adds a compiler message using the given diagnostic.</summary>
-  void AddMessage(Diagnostic diagnostic, FilePosition position)
+  void AddMessage(Diagnostic diagnostic, Position position)
   {
     AddMessage(diagnostic, position, new object[0]);
   }
 
   /// <summary>Adds a compiler message using the given diagnostic.</summary>
-  void AddMessage(Diagnostic diagnostic, FilePosition position, params object[] args)
+  void AddMessage(Diagnostic diagnostic, Position position, params object[] args)
   {
     if(Compiler.Options.ShouldShow(diagnostic))
     {
       AddMessage(diagnostic.ToMessage(Compiler.Options.TreatWarningsAsErrors, SourceName, position, args));
+    }
+  }
+
+  /// <summary>Appends the given text to the current XML comment.</summary>
+  void AppendComment(Position start, string xmlComment)
+  {
+    if(this.xmlComment == null)
+    {
+      this.xmlCommentStart = start;
+      this.xmlComment      = xmlComment;
+    }
+    else
+    {
+      this.xmlComment += "\n"+xmlComment;
     }
   }
 
@@ -840,6 +882,7 @@ public class Scanner : ScannerBase<Compiler,Token>
   }
 
   /// <summary>Evaluates the given preprocessor expression.</summary>
+  /// <param name="expression">The preprocessor expression.</param>
   /// <param name="value">A variable that receives whether the expression is true or false.</param>
   /// <returns>True if the expression was well-formed and false otherwise.</returns>
   bool PPEvaluate(string expression, out bool value)
@@ -1075,7 +1118,7 @@ public class Scanner : ScannerBase<Compiler,Token>
     char c = Char;
     if(!IsIdentifierStart(c) && c != '\\') return null;
 
-    FilePosition start = Position;
+    Position start = Position;
     StringBuilder sb = new StringBuilder();
 
     do
@@ -1178,11 +1221,15 @@ public class Scanner : ScannerBase<Compiler,Token>
 
   /// <summary>Overrides the current source name with this, if it's not equal to null.</summary>
   string sourceOverride;
+  /// <summary>The XML comment that has accumulated so far.</summary>
+  string xmlComment;
   /// <summary>The values of evaluating preprocessor #if/#elif tokens.</summary>
   Stack<PPResult> ppNesting = new Stack<PPResult>();
+  /// <summary>The starting position of the accumulated XML comment.</summary>
+  Position xmlCommentStart;
   /// <summary>The depth of nested #regions.</summary>
   int regionDepth;
-  /// <summary>Overrides the current line with this, if it's not equal to <see cref="DefaultLine"/>.</summary>
+  /// <summary>Overrides the current line with this, if it's not equal to <see cref="TokenData.DefaultLine"/>.</summary>
   int lineOverride;
   /// <summary>Whether this is the first token on the current line.</summary>
   bool firstOnLine;
